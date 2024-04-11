@@ -1,3 +1,11 @@
+**.DS_Store
+
+# big data folders
+data/strokes_background
+data/strokes_evaluation
+data/images_background
+data/images_evaluation
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
