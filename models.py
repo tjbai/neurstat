@@ -393,5 +393,27 @@ class NeuralStatistician(nn.Module):
         
         return mu_c, logvar_c, q_samples, q_params, p_params, px, x
     
-    def loss(self, outputs, weight):
+    def _log_likelihood(self, x, px):
+        x = x.view(-1, 28, 28)
+        px = px.view(-1, 28, 28)
+        return torch.sum((torch.log(px) * x) + (torch.log(1 - px) * (1 - x)))
+    
+    def loss(
+        self,
+        mu_c, logvar_c, # class distribution parameters
+        q_samples, q_params, p_params, # VAE stuff
+        px, x, # bernoulli distribution over x, input batch
+        alpha  # increase weight on reconstruction loss early on
+    ):
+        
+        # R_D, "reconstruction"
+        log_likelihood = self._log_likelihood(x, px)
+        R_D = log_likelihood / (self.batch_size * self.sample_size)
+        
+        # C_D, "context divergence"
+         
+        
+        # L_D, "latent divergence"
+        
+        
         pass
