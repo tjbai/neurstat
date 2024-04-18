@@ -2,18 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-if torch.cuda.is_available():
-    device = torch.device('cuda')
-    print(f'Using CUDA: {device}')
-else:
-    device = torch.device('cpu')
-    print('Using CPU')
-'''
-NOTE -- slow!
-elif torch.backends.mps.is_built():
-    device = torch.device('mps')
-    print('Using Metal')
-'''
+if torch.cuda.is_available(): device = torch.device('cuda')
+elif torch.backends.mps.is_built(): device = torch.device('mps')
+else: device = torch.device('cpu')
 
 class InputEncoder(nn.Module):
    
@@ -373,19 +364,16 @@ class NeuralStatistician(nn.Module):
             mu_z, logvar_z = layer(prev_z, c)
             p_params.append((mu_z, logvar_z))
             prev_z = q_samples[i]
-            
-        print([q.shape for q in q_samples])
         
         # (bsz*ssz, n_latent*z_dim) 
         z_concat = torch.cat(q_samples, dim=1)
-        print(z_concat.shape)
         px = self.observation_decoder(z_concat, c)
         
-        return mu_c, logvar_c, q_samples, q_params, p_params, px, x
+        return mu_c, logvar_c, q_params, p_params, px, x
     
     def _log_likelihood(self, x, px):
         x = x.view(-1, 28, 28)
-        px = px.view(-1, 28, 28)
+        px = torch.clamp(px.view(-1, 28, 28), min=1e-6, max=1-1e-6)
         return torch.sum((torch.log(px) * x) + (torch.log(1 - px) * (1 - x)))
     
     def _kl_normal(self, mu_q, logvar_q, mu_p, logvar_p):
@@ -397,7 +385,7 @@ class NeuralStatistician(nn.Module):
     def loss(
         self,
         mu_c, logvar_c, # class distribution parameters
-        q_samples, q_params, p_params, # VAE stuff
+        q_params, p_params, # VAE stuff
         px, x, # bernoulli distribution over x, input batch
     ):
         
@@ -406,7 +394,7 @@ class NeuralStatistician(nn.Module):
         R_D = log_likelihood / (self.batch_size * self.sample_size)
         
         # C_D, "context divergence"
-        C_D = self._kl_normal(mu_c, logvar_c, torch.zeros(512), torch.ones(512)) # spherical gaussian
+        C_D = self._kl_normal(mu_c, logvar_c, torch.zeros(512).to(device), torch.ones(512).to(device))
         
         # L_D, "latent divergence"
         L_D = 0
@@ -421,14 +409,18 @@ class NeuralStatistician(nn.Module):
         # group and normalize   
         KL = (C_D + L_D) / (self.batch_size * self.sample_size)
        
-        # NOTE -- weighting?
-        return C_D - KL
-   
-    # NOTE -- clip gradients?
+        # NOTE -- weighting? 
+        return KL - R_D
+    
     def step(self, inputs, optim):
         outputs = self.forward(inputs) 
         loss = self.loss(*outputs)
+        
         optim.zero_grad()
         loss.backward()
+        for param in self.parameters():
+            if param.grad is None: continue
+            param.grad.data = param.grad.data.clamp(min=-0.5, max=0.5)
         optim.step()
+        
         return loss
