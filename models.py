@@ -5,13 +5,15 @@ import torch.nn.functional as F
 if torch.cuda.is_available():
     device = torch.device('cuda')
     print(f'Using CUDA: {device}')
-## empirically slower than CPU on M1
-# elif torch.backends.mps.is_built():
-#     device = torch.device('mps')
-#     print('Using Metal')
 else:
     device = torch.device('cpu')
     print('Using CPU')
+'''
+NOTE -- slow!
+elif torch.backends.mps.is_built():
+    device = torch.device('mps')
+    print('Using Metal')
+'''
 
 class InputEncoder(nn.Module):
    
@@ -53,26 +55,25 @@ class InputEncoder(nn.Module):
             h = self.nonlin(h)
         return h
 
-# mu, logvar = q(c | h_1,...,h_m)
-class StatisticNetwork(nn.Module):
+# mu_c, logvar_c = q(c | h_1,...,h_m)
+class StatisticNet(nn.Module):
     
     def __init__(
         self,
         batch_size=16, sample_size=5,
-        n_features=256*4*4, hidden_dim=256, c_dim=512,
+        input_dim=256*4*4, hidden_dim=256, c_dim=512,
     ):
         super().__init__()
         
-        self.batch_size = batch_size        # datasets/batch
-        self.sample_size = sample_size      # examples/dataset 
-        
-        self.n_features = n_features        # output of encoder
+        self.batch_size = batch_size
+        self.sample_size = sample_size
+        self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.c_dim = c_dim
        
         self.nonlin = nn.ELU()
         
-        self.pre_fc = nn.Linear(self.n_features, self.hidden_dim)
+        self.pre_fc = nn.Linear(self.input_dim, self.hidden_dim)
         self.pre_batch = nn.BatchNorm1d(self.hidden_dim) 
         
         self.post_fc_layers = nn.ModuleList([
@@ -88,7 +89,7 @@ class StatisticNetwork(nn.Module):
         ])
 
     def forward(self, h):
-        h = h.view(-1, self.n_features)
+        h = h.view(-1, self.input_dim)
         
         h = self.pre_fc(h)
         h = self.pre_batch(h)
@@ -113,33 +114,17 @@ class StatisticNetwork(nn.Module):
         h = h.view(self.batch_size, self.sample_size, self.hidden_dim)
         return h.mean(1)
     
-    # this implemented previously, should try to ablate this? 
-    def dropout(self, h):
-        a = torch.ones((self.batch_size, 1, 1)).to(device)
-        b = torch.bernoulli(([1, 0.5][self.training]) * torch.ones((self.batch_size, self.sample_size-1, 1))).to(device)
-        mask = torch.cat([a, b], 1)
-        
-        e = e.view(self.batch_size, self.sample_size, self.hidden_dim)
-        e = e * mask.expand_as(e)               # dropout samples
-
-        kept = torch.sum(mask, 1)               # (batch_size, 1)
-        e = torch.sum(e, 1)                     # (batch_size, 1, hidden_dim)
-        e /= kept.expand_as(e)                  # (batch_size, 1, hidden_dim)
-
-        e = torch.cat([e, kept], 2).squeeze(1)  # (batch_size, hidden_dim+1)
-
-        return e
+# mlp with residual connections 
+class ResNet(nn.Module):
     
-class ResidualNetwork(nn.Module):
-    
-    def __init__(self, hidden_dim=256, n_hidden=3):
+    def __init__(self, hidden_dim=256, mlp_layers=3):
         super().__init__()
         self.nonlin = nn.ELU()
         self.layers = nn.ModuleList([
             nn.ModuleList([
                 nn.Linear(hidden_dim, hidden_dim),
                 nn.BatchNorm1d(hidden_dim)
-            ])
+            ]) for _ in range(mlp_layers)
         ])
         
     def forward(self, x):
@@ -152,29 +137,29 @@ class ResidualNetwork(nn.Module):
         return x
 
 # mu_z, s2_z = p(z_i-1 | z_i, h, c)   
-class InferenceNetwork(nn.Module):
+class InferenceNet(nn.Module):
     
     def __init__(
         self,
         batch_size=16, sample_size=5,
-        n_features=256*4*4, hidden_dim=256, c_dim=512, z_dim=16,
-        n_hidden=3
+        input_dim=256*4*4, hidden_dim=256, c_dim=512, z_dim=16,
+        mlp_layers=3
     ):
         super().__init__()
         
         self.batch_size = batch_size
         self.sample_size = sample_size
-        self.n_features = n_features
+        self.input_dim =input_dim 
         self.hidden_dim = hidden_dim
         self.c_dim = c_dim
         self.z_dim = z_dim
-        self.n_hidden = n_hidden
+        self.mlp_layers =mlp_layers 
        
         self.nonlin = nn.ELU()
-        self.fc_h = nn.Linear(self.n_features, self.hidden_dim) 
+        self.fc_h = nn.Linear(self.input_dim, self.hidden_dim) 
         self.fc_z = nn.Linear(self.z_dim, self.hidden_dim) 
         self.fc_c = nn.Linear(self.c_dim, self.hidden_dim) 
-        self.res_net = ResidualNetwork(self.hidden_dim, self.n_hidden)
+        self.res_net = ResNet(self.hidden_dim, self.mlp_layers)
         self.post_fc = nn.Linear(self.hidden_dim, 2*self.z_dim)
         self.post_bn = nn.BatchNorm1d(1)
         
@@ -188,7 +173,7 @@ class InferenceNetwork(nn.Module):
         else:
             z = torch.zeros(self.batch_size, self.sample_size, self.hidden_dim).to(device)
         
-        h = h.view(-1, self.n_features)
+        h = h.view(-1, self.input_dim)
         h = self.fc_h(h)
         h = h.view(self.batch_size, self.sample_size, self.hidden_dim)
         
@@ -210,29 +195,29 @@ class InferenceNetwork(nn.Module):
         # note to self: these are diagonal gaussian parameters
         return o[:, :self.z_dim], o[:, self.z_dim:]
 
-# mu_z, s2_z = p(z_i-1 | z_i, c) 
+# mu_z, s2_z = p(z_i-1 | z_i, c), prior
 class LatentDecoder(nn.Module):
     
     def __init__(
         self,
         batch_size=16, sample_size=5,
-        n_features=256*4*4, hidden_dim=256, c_dim=512, z_dim=16,
-        n_hidden=3 
+        input_dim=256*4*4, hidden_dim=256, c_dim=512, z_dim=16,
+        mlp_layers=3 
     ):
         super().__init__()        
         
         self.batch_size = batch_size 
         self.sample_size = sample_size
-        self.n_features = n_features
+        self.input_dim =input_dim 
         self.hidden_dim = hidden_dim
         self.c_dim = c_dim
         self.z_dim = z_dim 
-        self.n_hidden = n_hidden
+        self.mlp_layers =mlp_layers 
        
         self.nonlin = nn.ELU() 
         self.fc_z = nn.Linear(self.z_dim, self.hidden_dim)
         self.fc_c = nn.Linear(self.c_dim, self.hidden_dim)
-        self.res_net = ResidualNetwork(self.hidden_dim, self.n_hidden)
+        self.res_net = ResNet(self.hidden_dim, self.mlp_layers)
         self.post_fc = nn.Linear(self.hidden_dim, 2*self.z_dim)
         self.post_bn = nn.BatchNorm1d(1)
         
@@ -243,7 +228,8 @@ class LatentDecoder(nn.Module):
             z = self.fc_z(z)
             z = z.view(self.batch_size, self.sample_size, self.hidden_dim) 
         else:
-            z = torch.zeros(self.batch_size, self.sample_size, self.hidden_dim).to(device)
+            # NOTE -- the second dimension here is 1
+            z = torch.zeros(self.batch_size, 1, self.hidden_dim).to(device)
             
         c = self.fc_c(c)
         c = c.view(self.batch_size, 1, self.hidden_dim).expand_as(z)
@@ -266,14 +252,14 @@ class ObservationDecoder(nn.Module):
     def __init__(
         self,
         batch_size=16, sample_size=5,
-        n_features=256*4*4, hidden_dim=256, c_dim=512, z_dim=16,
+        input_dim=256*4*4, hidden_dim=256, c_dim=512, z_dim=16,
         n_latent=3
     ):
         super().__init__()
         
         self.batch_size = batch_size
         self.sample_size = sample_size
-        self.n_features = n_features
+        self.input_dim =input_dim 
         self.hidden_dim = hidden_dim
         self.c_dim = c_dim
         self.z_dim = z_dim
@@ -282,7 +268,7 @@ class ObservationDecoder(nn.Module):
         self.nonlin = nn.ELU() 
         self.z_concat_fc = nn.Linear(self.n_latent * self.z_dim, self.hidden_dim)
         self.c_fc = nn.Linear(self.c_dim, self.hidden_dim)
-        self.project_fc = nn.Linear(self.hidden_dim, self.n_features)
+        self.project_fc = nn.Linear(self.hidden_dim, self.input_dim)
         
         self.conv_layers = nn.ModuleList([
             nn.Conv2d(256, 256, kernel_size=3, padding=1, stride=1),
@@ -335,24 +321,28 @@ class ObservationDecoder(nn.Module):
     
 class NeuralStatistician(nn.Module):
     
-    def __init__(self):
+    def __init__(self, batch_size=16, sample_size=5, z_dim=16):
         super().__init__() 
         
+        self.batch_size = batch_size
+        self.sample_size = sample_size
+        self.z_dim = 16
+        
         self.encoder = InputEncoder()
-        self.statistic_network = StatisticNetwork()
-        self.inference_networks = nn.ModuleList([InferenceNetwork() for _ in range(3)])
+        self.statistic_network = StatisticNet()
+        self.inference_networks = nn.ModuleList([InferenceNet() for _ in range(3)])
         self.latent_decoders = nn.ModuleList([LatentDecoder() for _ in range(3)])
         self.observation_decoder = ObservationDecoder()
         
-        self.apply(self.init_weights) # from https://github.com/conormdurkan/neural-statistician
+        self.apply(self.init_weights) 
        
     @staticmethod 
-    def init_weights(m):
+    def init_weights(m): # from https://github.com/conormdurkan/neural-statistician
         if isinstance(m, (nn.Linear, nn.Conv2d)):
             nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain('relu'))
             nn.init.constant_(m.bias.data, 0)
     
-    # VAE reparameterization trick, not too familiar 
+    # VAE reparameterization trick
     def reparam(self, mu, logvar):
         stdev = torch.exp(0.5 * logvar)
         eps = torch.randn(stdev.shape).to(device)
@@ -398,12 +388,17 @@ class NeuralStatistician(nn.Module):
         px = px.view(-1, 28, 28)
         return torch.sum((torch.log(px) * x) + (torch.log(1 - px) * (1 - x)))
     
+    def _kl_normal(self, mu_q, logvar_q, mu_p, logvar_p):
+        mu_p = mu_p.expand_as(mu_q)
+        logvar_p = logvar_p.expand_as(logvar_q)
+        tmp = ((mu_q - mu_p)**2 + torch.exp(logvar_q)) / torch.exp(logvar_p)
+        return 0.5 * torch.sum(tmp + logvar_p - logvar_q - 1)
+    
     def loss(
         self,
         mu_c, logvar_c, # class distribution parameters
         q_samples, q_params, p_params, # VAE stuff
         px, x, # bernoulli distribution over x, input batch
-        alpha  # increase weight on reconstruction loss early on
     ):
         
         # R_D, "reconstruction"
@@ -411,9 +406,29 @@ class NeuralStatistician(nn.Module):
         R_D = log_likelihood / (self.batch_size * self.sample_size)
         
         # C_D, "context divergence"
-         
+        C_D = self._kl_normal(mu_c, logvar_c, torch.zeros(512), torch.ones(512)) # spherical gaussian
         
         # L_D, "latent divergence"
-        
-        
-        pass
+        L_D = 0
+        for i in range(3):
+            sample_dim = 1 if i == 0 else self.sample_size
+            mu_q = q_params[i][0].view(self.batch_size, self.sample_size, self.z_dim)
+            logvar_q = q_params[i][1].view(self.batch_size, self.sample_size, self.z_dim)
+            mu_p = p_params[i][0].view(self.batch_size, sample_dim, self.z_dim)
+            logvar_p = p_params[i][1].view(self.batch_size, sample_dim, self.z_dim)
+            L_D += self._kl_normal(mu_q, logvar_q, mu_p, logvar_p)
+         
+        # group and normalize   
+        KL = (C_D + L_D) / (self.batch_size * self.sample_size)
+       
+        # NOTE -- weighting?
+        return C_D - KL
+   
+    # NOTE -- clip gradients?
+    def step(self, inputs, optim):
+        outputs = self.forward(inputs) 
+        loss = self.loss(*outputs)
+        optim.zero_grad()
+        loss.backward()
+        optim.step()
+        return loss
