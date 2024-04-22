@@ -42,10 +42,16 @@ def plot(losses, evals, prefix):
     axs[1].title('Eval')
     plt.savefig(f'figures/{prefix}-training.png')
 
-def train(model, optim, loader, epochs, checkpoint_at, eval_at, prefix):
+def train(
+    model, optim, loader,
+    epochs, checkpoint_at, eval_at, prefix,
+    alpha
+):
+    
     model.train()
     losses = []
     evals = []
+    alpha = 1
     
     for epoch in range(epochs):
         print(f'Starting epoch: {epoch + 1}') 
@@ -53,8 +59,10 @@ def train(model, optim, loader, epochs, checkpoint_at, eval_at, prefix):
         cum_loss = 0
         for batch in tqdm(loader):
             inputs = batch.to(device)
-            loss = model.step(inputs, optim)
+            loss = model.step(inputs, optim, alpha)
             cum_loss += loss
+            
+        alpha *= 0.5 # down-weight
        
         print(f'Loss: {(cum_loss):.3e}')
         losses.append(cum_loss)
@@ -79,6 +87,7 @@ def parse_args():
     parser.add_argument('--eval-at', type=int, default=20)
     parser.add_argument('--from-checkpoint', type=int)
     parser.add_argument('--prefix', type=str)
+    parser.add_argument('--alpha-weight', action='store_true')
     return parser.parse_args()
 
 def main():
@@ -94,7 +103,11 @@ def main():
         model.load_state_dict(torch.load(f'checkpoints/checkpoint-model-{args.from_checkpoint}'))
         optim.load_state_dict(torch.load(f'checkpoints/checkpoint-optim-{args.from_checkpoint}'))
         
-    train(model, optim, loader, args.epochs, args.checkpoint_at, args.eval_at, args.prefix)
+    train(
+        model, optim, loader,
+        args.epochs, args.checkpoint_at, args.eval_at, args.prefix,
+        args.alpha_weight
+    )
     
 if __name__ == '__main__':
     main()
