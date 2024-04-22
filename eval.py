@@ -11,6 +11,8 @@ if torch.cuda.is_available(): device = torch.device('cuda')
 elif torch.backends.mps.is_built(): device = torch.device('mps')
 else: device = torch.device('cpu')
 
+random.seed(42)
+
 def kl(mu_q, logvar_q, mu_p, logvar_p):
     mu_q = mu_q.expand_as(mu_p)
     logvar_q = logvar_q.expand_as(logvar_p)
@@ -24,6 +26,8 @@ def is_correct(mu_c, logvar_c):
     return scores, torch.argmin(scores) == 0
 
 def create_tests(n, examples, labels):
+    import gc
+    
     labels = labels - np.min(labels)
     uniq = list(set(labels))
     
@@ -33,7 +37,6 @@ def create_tests(n, examples, labels):
     one_hot = np.zeros((N, C))
     for i, label in enumerate(labels): one_hot[i, label] = 1
     
-    tests = []
     for _ in range(n):
         base_class, *noise = random.sample(uniq, k=20)
         res = random.sample(list(indices[one_hot[:, base_class].astype(bool)]), k=2)
@@ -42,15 +45,17 @@ def create_tests(n, examples, labels):
             [d] = random.sample(list(indices[one_hot[:, i].astype(bool)]), k=1)
             res.append(d)
             
-        tests.append(torch.Tensor(examples[res]).view(21, 1, 28, 28).to(device))
+        test = torch.Tensor(examples[res]).view(21, 1, 28, 28).to(device)
+        yield test
         
-    return tests
+        del test
+        torch.cuda.empty_cache()
     
-def evaluate(tests, model):
+def evaluate(tests, model, n):
     model.eval()
     correct = 0
     all_scores = []
-    for test in tqdm(tests):
+    for test in tqdm(tests, total=n):
         mu_c, logvar_c, *_ = model(test)
         scores, correct = is_correct(mu_c, logvar_c)
         all_scores.append(scores)
@@ -74,7 +79,7 @@ def main():
     examples, labels = objs[2*args.split], objs[2*args.split+1]
     test = create_tests(args.n, examples, labels)
    
-    scores, error = evaluate(test, model)
+    scores, error = evaluate(test, model, args.n)
     print(error.item())
     
 if __name__ == '__main__':
