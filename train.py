@@ -9,8 +9,7 @@ from tqdm import tqdm
 
 from models import NeuralStatistician
 from data import OmniglotDataset
-from train import create_tests, evaluate
-
+from eval import create_tests, evaluate
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
@@ -26,8 +25,13 @@ with open('./data/chardata.pkl', 'rb') as f: objs = pickle.load(f)
 val, val_labels = objs[2], objs[3]
 
 def eval(model):
+    eval_model = NeuralStatistician(batch_size=21, sample_size=1).to(device)
+    eval_model.load_state_dict(model.state_dict())
     tests = create_tests(100, val, val_labels)
-    _, correct = evaluate(tests, model, 100)
+    _, correct = evaluate(tests, eval_model, 100)
+    del eval_model
+    torch.cuda.empty_cache()
+    torch.mps.empty_cache()
     return correct
 
 def plot(losses, evals):

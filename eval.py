@@ -14,15 +14,18 @@ else: device = torch.device('cpu')
 random.seed(42)
 
 def kl(mu_q, logvar_q, mu_p, logvar_p):
-    mu_q = mu_q.expand_as(mu_p)
-    logvar_q = logvar_q.expand_as(logvar_p)
+    # mu_q = mu_q.expand_as(mu_p)
+    # logvar_q = logvar_q.expand_as(logvar_p)
+    mu_p = mu_p.expand_as(mu_q)
+    logvar_p = logvar_p.expand_as(logvar_q)
     rat = ((mu_q - mu_p)**2 + torch.exp(logvar_q)) / torch.exp(logvar_p)
     return 0.5 * torch.sum(rat + logvar_p - logvar_q - 1, dim=1)
 
 def is_correct(mu_c, logvar_c):
     mu_one_shot, mu_candidates = mu_c[0], mu_c[1:]
     logvar_one_shot, logvar_candidates = logvar_c[0], logvar_c[1:]
-    scores = kl(mu_one_shot, logvar_one_shot, mu_candidates, logvar_candidates)
+    # scores = kl(mu_one_shot, logvar_one_shot, mu_candidates, logvar_candidates)
+    scores = kl(mu_candidates, logvar_candidates, mu_one_shot, logvar_one_shot)
     cor = torch.argmin(scores) == 0
     del scores
     torch.cuda.empty_cache()
