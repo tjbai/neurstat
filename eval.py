@@ -23,7 +23,11 @@ def is_correct(mu_c, logvar_c):
     mu_one_shot, mu_candidates = mu_c[0], mu_c[1:]
     logvar_one_shot, logvar_candidates = logvar_c[0], logvar_c[1:]
     scores = kl(mu_one_shot, logvar_one_shot, mu_candidates, logvar_candidates)
-    return scores, torch.argmin(scores) == 0
+    cor = torch.argmin(scores) == 0
+    del scores
+    torch.cuda.empty_cache()
+    torch.mps.empty_cache()
+    return None, cor
 
 def create_tests(n, examples, labels):
     import gc
@@ -50,6 +54,7 @@ def create_tests(n, examples, labels):
         
         del test
         torch.cuda.empty_cache()
+        torch.mps.empty_cache()
     
 def evaluate(tests, model, n):
     model.eval()
@@ -57,10 +62,10 @@ def evaluate(tests, model, n):
     all_scores = []
     for test in tqdm(tests, total=n):
         mu_c, logvar_c, *_ = model(test)
-        scores, correct = is_correct(mu_c, logvar_c)
+        scores, cor = is_correct(mu_c, logvar_c)
         all_scores.append(scores)
-        correct += correct
-    return all_scores, correct / len(tests)
+        correct += cor
+    return all_scores, correct / n
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -79,7 +84,7 @@ def main():
     examples, labels = objs[2*args.split], objs[2*args.split+1]
     test = create_tests(args.n, examples, labels)
    
-    scores, error = evaluate(test, model, args.n)
+    _, error = evaluate(test, model, args.n)
     print(error.item())
     
 if __name__ == '__main__':

@@ -1,3 +1,4 @@
+import pickle
 import argparse
 
 import matplotlib.pyplot as plt
@@ -8,6 +9,7 @@ from tqdm import tqdm
 
 from models import NeuralStatistician
 from data import OmniglotDataset
+from train import create_tests, evaluate
 
 
 if torch.cuda.is_available():
@@ -19,15 +21,27 @@ elif torch.backends.mps.is_built():
 else:
     device = torch.device('cpu')
     print('Using CPU')
+    
+with open('./data/chardata.pkl', 'rb') as f: objs = pickle.load(f)
+val, val_labels = objs[2], objs[3]
 
-def plot(losses):
-    plt.plot(losses)
-    plt.title('Loss')
-    plt.savefig('figures/loss.png')
+def eval(model):
+    tests = create_tests(100, val, val_labels)
+    _, correct = evaluate(tests, model, 100)
+    return correct
 
-def train(model, optim, loader, epochs, checkpoint_at):
+def plot(losses, evals):
+    fig, axs = plt.subplots(1, 2, figsize=(12, 4)) 
+    axs[0].plot(losses)
+    axs[0].title('Loss')
+    axs[1].plot(evals)
+    axs[1].title('Eval')
+    plt.savefig('figures/training.png')
+
+def train(model, optim, loader, epochs, checkpoint_at, eval_at):
     model.train()
     losses = []
+    evals = []
     
     for epoch in range(epochs):
         print(f'Starting epoch: {epoch + 1}') 
@@ -44,8 +58,13 @@ def train(model, optim, loader, epochs, checkpoint_at):
         if (epoch + 1) % checkpoint_at == 0:
             torch.save(model.state_dict(), f'checkpoints/checkpoint-model-{epoch}')
             torch.save(optim.state_dict(), f'checkpoints/checkpoint-optim-{epoch}')
+            
+        if (epoch + 1) % eval_at == 0:
+            correct = eval(model)
+            evals.append(correct)
+            print(f'Correct: {correct:.3f}')
     
-    plot(losses.cpu())
+    plot(losses.cpu(), evals.cpu())
 
 # NOTE -- hyperparams are frozen for the most part
 def parse_args():
@@ -53,6 +72,7 @@ def parse_args():
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--lr', type=int, default=1e-3)
     parser.add_argument('--checkpoint-at', type=int, default=20)
+    parser.add_argument('--eval-at', type=int, default=20)
     parser.add_argument('--from-checkpoint', type=int)
     return parser.parse_args()
 
@@ -69,7 +89,7 @@ def main():
         model.load_state_dict(torch.load(f'checkpoints/checkpoint-model-{args.from_checkpoint}'))
         optim.load_state_dict(torch.load(f'checkpoints/checkpoint-optim-{args.from_checkpoint}'))
         
-    train(model, optim, loader, args.epochs, args.checkpoint_at)
+    train(model, optim, loader, args.epochs, args.checkpoint_at, args.eval_at)
     
 if __name__ == '__main__':
     main()
