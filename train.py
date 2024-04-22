@@ -42,7 +42,7 @@ def plot(losses, evals):
     axs[1].title('Eval')
     plt.savefig('figures/training.png')
 
-def train(model, optim, loader, epochs, checkpoint_at, eval_at):
+def train(model, optim, loader, epochs, checkpoint_at, eval_at, prefix):
     model.train()
     losses = []
     evals = []
@@ -60,8 +60,8 @@ def train(model, optim, loader, epochs, checkpoint_at, eval_at):
         losses.append(cum_loss)
         
         if (epoch + 1) % checkpoint_at == 0:
-            torch.save(model.state_dict(), f'checkpoints/checkpoint-model-{epoch}')
-            torch.save(optim.state_dict(), f'checkpoints/checkpoint-optim-{epoch}')
+            torch.save(model.state_dict(), f'checkpoints/prefix-checkpoint-model-{epoch}')
+            torch.save(optim.state_dict(), f'checkpoints/prefix-checkpoint-optim-{epoch}')
             
         if (epoch + 1) % eval_at == 0:
             correct = eval(model)
@@ -78,6 +78,7 @@ def parse_args():
     parser.add_argument('--checkpoint-at', type=int, default=20)
     parser.add_argument('--eval-at', type=int, default=20)
     parser.add_argument('--from-checkpoint', type=int)
+    parser.add_argument('--prefix', type=str)
     return parser.parse_args()
 
 def main():
@@ -93,7 +94,7 @@ def main():
         model.load_state_dict(torch.load(f'checkpoints/checkpoint-model-{args.from_checkpoint}'))
         optim.load_state_dict(torch.load(f'checkpoints/checkpoint-optim-{args.from_checkpoint}'))
         
-    train(model, optim, loader, args.epochs, args.checkpoint_at, args.eval_at)
+    train(model, optim, loader, args.epochs, args.checkpoint_at, args.eval_at, args.prefix)
     
 if __name__ == '__main__':
     main()
