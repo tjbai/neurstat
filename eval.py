@@ -11,18 +11,9 @@ if torch.cuda.is_available(): device = torch.device('cuda')
 elif torch.backends.mps.is_built(): device = torch.device('mps')
 else: device = torch.device('cpu')
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--n', type=int)
-    parser.add_argument('--from-checkpoint', type=Path)
-    parser.add_argument('--examples', type=Path)
-    parser.add_argument('--split', default=2) # test vs. val split
-    return parser.parse_args()
-
 def kl(mu_q, logvar_q, mu_p, logvar_p):
     mu_q = mu_q.expand_as(mu_p)
     logvar_q = logvar_q.expand_as(logvar_p)
-    print(mu_q.shape, logvar_q.shape, mu_p.shape, logvar_p.shape)
     rat = ((mu_q - mu_p)**2 + torch.exp(logvar_q)) / torch.exp(logvar_p)
     return 0.5 * torch.sum(rat + logvar_p - logvar_q - 1, dim=1)
 
@@ -66,6 +57,13 @@ def evaluate(tests, model):
         correct += correct
     return all_scores, correct / len(tests)
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--n', type=int)
+    parser.add_argument('--from-checkpoint', type=Path)
+    parser.add_argument('--split', default=2) # test vs. val split
+    return parser.parse_args()
+
 def main():
     args = parse_args()
     
@@ -77,7 +75,7 @@ def main():
     test = create_tests(args.n, examples, labels)
    
     scores, error = evaluate(test, model)
-    print(error)
+    print(error.item())
     
 if __name__ == '__main__':
-    pass
+    main()
