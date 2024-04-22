@@ -34,13 +34,13 @@ def eval(model):
     torch.mps.empty_cache()
     return correct
 
-def plot(losses, evals):
+def plot(losses, evals, prefix):
     fig, axs = plt.subplots(1, 2, figsize=(12, 4)) 
     axs[0].plot(losses)
     axs[0].title('Loss')
     axs[1].plot(evals)
     axs[1].title('Eval')
-    plt.savefig('figures/training.png')
+    plt.savefig(f'figures/{prefix}-training.png')
 
 def train(model, optim, loader, epochs, checkpoint_at, eval_at, prefix):
     model.train()
@@ -60,15 +60,15 @@ def train(model, optim, loader, epochs, checkpoint_at, eval_at, prefix):
         losses.append(cum_loss)
         
         if (epoch + 1) % checkpoint_at == 0:
-            torch.save(model.state_dict(), f'checkpoints/prefix-checkpoint-model-{epoch}')
-            torch.save(optim.state_dict(), f'checkpoints/prefix-checkpoint-optim-{epoch}')
+            torch.save(model.state_dict(), f'checkpoints/{prefix}-checkpoint-model-{epoch}')
+            torch.save(optim.state_dict(), f'checkpoints/{prefix}-checkpoint-optim-{epoch}')
             
         if (epoch + 1) % eval_at == 0:
             correct = eval(model)
             evals.append(correct)
             print(f'Correct: {correct:.3f}')
     
-    plot(losses.cpu(), evals.cpu())
+    plot(losses.cpu(), evals.cpu(), prefix)
 
 # NOTE -- hyperparams are frozen for the most part
 def parse_args():
