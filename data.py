@@ -6,11 +6,8 @@ from torch.utils.data import Dataset
 class OmniglotDataset(Dataset):
     
     def __init__(self, input_path, split_id=0):
-        with open(input_path, 'rb') as f:
-            objs = pickle.load(f)
-            
-        data = [(objs[2*i], objs[2*i+1]) for i in range(3)]
-        examples, labels = data[split_id]
+        with open(input_path, 'rb') as f: objs = pickle.load(f)
+        examples, labels = objs[2*split_id], objs[2*split_id+1]
         
         C = np.max(labels) + 1
         N = len(labels)

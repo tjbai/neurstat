@@ -13,7 +13,6 @@ from data import OmniglotDataset
 if torch.cuda.is_available():
     device = torch.device('cuda')
     print(f'Using CUDA: {device}')
-# NOTE -- slow!
 elif torch.backends.mps.is_built():
     device = torch.device('mps')
     print('Using Metal')
@@ -51,12 +50,10 @@ def train(model, optim, loader, epochs, checkpoint_at):
 # NOTE -- hyperparams are frozen for the most part
 def parse_args():
     parser = argparse.ArgumentParser()
-    
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--lr', type=int, default=1e-3)
     parser.add_argument('--checkpoint-at', type=int, default=20)
     parser.add_argument('--from-checkpoint', type=int)
-    
     return parser.parse_args()
 
 def main():

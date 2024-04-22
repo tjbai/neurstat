@@ -1,0 +1,83 @@
+import torch
+import pickle
+import argparse
+import random
+import numpy as np
+from tqdm import tqdm
+from pathlib import Path
+from models import NeuralStatistician
+
+if torch.cuda.is_available(): device = torch.device('cuda')
+elif torch.backends.mps.is_built(): device = torch.device('mps')
+else: device = torch.device('cpu')
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--n', type=int)
+    parser.add_argument('--from-checkpoint', type=Path)
+    parser.add_argument('--examples', type=Path)
+    parser.add_argument('--split', default=2) # test vs. val split
+    return parser.parse_args()
+
+def kl(mu_q, logvar_q, mu_p, logvar_p):
+    mu_q = mu_q.expand_as(mu_p)
+    logvar_q = logvar_q.expand_as(logvar_p)
+    print(mu_q.shape, logvar_q.shape, mu_p.shape, logvar_p.shape)
+    rat = ((mu_q - mu_p)**2 + torch.exp(logvar_q)) / torch.exp(logvar_p)
+    return 0.5 * torch.sum(rat + logvar_p - logvar_q - 1, dim=1)
+
+def is_correct(mu_c, logvar_c):
+    mu_one_shot, mu_candidates = mu_c[0], mu_c[1:]
+    logvar_one_shot, logvar_candidates = logvar_c[0], logvar_c[1:]
+    scores = kl(mu_one_shot, logvar_one_shot, mu_candidates, logvar_candidates)
+    return scores, torch.argmin(scores) == 0
+
+def create_tests(n, examples, labels):
+    labels = labels - np.min(labels)
+    uniq = list(set(labels))
+    
+    N = len(labels)
+    C = len(uniq)
+    indices = np.arange(len(labels)) 
+    one_hot = np.zeros((N, C))
+    for i, label in enumerate(labels): one_hot[i, label] = 1
+    
+    tests = []
+    for _ in range(n):
+        base_class, *noise = random.sample(uniq, k=20)
+        res = random.sample(list(indices[one_hot[:, base_class].astype(bool)]), k=2)
+        
+        for i in noise:
+            [d] = random.sample(list(indices[one_hot[:, i].astype(bool)]), k=1)
+            res.append(d)
+            
+        tests.append(torch.Tensor(examples[res]).view(21, 1, 28, 28).to(device))
+        
+    return tests
+    
+def evaluate(tests, model):
+    model.eval()
+    correct = 0
+    all_scores = []
+    for test in tqdm(tests):
+        mu_c, logvar_c, *_ = model(test)
+        scores, correct = is_correct(mu_c, logvar_c)
+        all_scores.append(scores)
+        correct += correct
+    return all_scores, correct / len(tests)
+
+def main():
+    args = parse_args()
+    
+    model = NeuralStatistician(batch_size=21, sample_size=1).to(device) # 1 example + 20 candidates
+    model.load_state_dict(torch.load(args.from_checkpoint, map_location=device))
+    
+    with open('./data/chardata.pkl', 'rb') as f: objs = pickle.load(f)
+    examples, labels = objs[2*args.split], objs[2*args.split+1]
+    test = create_tests(args.n, examples, labels)
+   
+    scores, error = evaluate(test, model)
+    print(error)
+    
+if __name__ == '__main__':
+    pass

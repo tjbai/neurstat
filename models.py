@@ -315,15 +315,16 @@ class NeuralStatistician(nn.Module):
     def __init__(self, batch_size=16, sample_size=5, z_dim=16):
         super().__init__() 
         
+        szs = {'batch_size': batch_size, 'sample_size': sample_size}
         self.batch_size = batch_size
         self.sample_size = sample_size
-        self.z_dim = 16
+        self.z_dim = z_dim
         
         self.encoder = InputEncoder()
-        self.statistic_network = StatisticNet()
-        self.inference_networks = nn.ModuleList([InferenceNet() for _ in range(3)])
-        self.latent_decoders = nn.ModuleList([LatentDecoder() for _ in range(3)])
-        self.observation_decoder = ObservationDecoder()
+        self.statistic_network = StatisticNet(**szs)
+        self.inference_networks = nn.ModuleList([InferenceNet(**szs) for _ in range(3)])
+        self.latent_decoders = nn.ModuleList([LatentDecoder(**szs) for _ in range(3)])
+        self.observation_decoder = ObservationDecoder(**szs)
         
         self.apply(self.init_weights) 
        
