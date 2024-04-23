@@ -11,11 +11,13 @@ from models import NeuralStatistician
 from data import OmniglotDataset
 from eval import create_tests, evaluate
 
+mps = False
 if torch.cuda.is_available():
     device = torch.device('cuda')
     print(f'Using CUDA: {device}')
 elif torch.backends.mps.is_built():
     device = torch.device('mps')
+    mps = True
     print('Using Metal')
 else:
     device = torch.device('cpu')
@@ -31,15 +33,15 @@ def eval(model):
     _, correct = evaluate(tests, eval_model, 100)
     del eval_model
     torch.cuda.empty_cache()
-    torch.mps.empty_cache()
+    if mps: torch.mps.empty_cache()
     return correct
 
 def plot(losses, evals, prefix):
     fig, axs = plt.subplots(1, 2, figsize=(12, 4)) 
     axs[0].plot(losses)
-    axs[0].title('Loss')
+    axs[0].set_title('Loss')
     axs[1].plot(evals)
-    axs[1].title('Eval')
+    axs[1].set_title('One-shot Classification')
     plt.savefig(f'figures/{prefix}-training.png')
 
 def train(

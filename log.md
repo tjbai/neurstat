@@ -1,8 +1,14 @@
 checkpoint-v1:
-1000 examples, accuracy around 38%
+38%
 
-checkpoint-v2: try for more epochs and with intermediate eval checks
+checkpoint-v2: intermediate one-shot classification
 
-checkpoint-v3: try with alpha weighting
+checkpoint-v3: dynamic loss interpolation
 
-checkpoint-v4: try with training sample dilation
+checkpoint-v4: data augmentation
+
+TODO:
+- add generation code
+- add eval loss to graph
+- 5-shot classification
+- 

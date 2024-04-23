@@ -7,8 +7,11 @@ from tqdm import tqdm
 from pathlib import Path
 from models import NeuralStatistician
 
+mps = False
 if torch.cuda.is_available(): device = torch.device('cuda')
-elif torch.backends.mps.is_built(): device = torch.device('mps')
+elif torch.backends.mps.is_built():
+    device = torch.device('mps')
+    mps = True
 else: device = torch.device('cpu')
 
 random.seed(42)
@@ -24,12 +27,11 @@ def kl(mu_q, logvar_q, mu_p, logvar_p):
 def is_correct(mu_c, logvar_c):
     mu_one_shot, mu_candidates = mu_c[0], mu_c[1:]
     logvar_one_shot, logvar_candidates = logvar_c[0], logvar_c[1:]
-    # scores = kl(mu_one_shot, logvar_one_shot, mu_candidates, logvar_candidates)
     scores = kl(mu_candidates, logvar_candidates, mu_one_shot, logvar_one_shot)
     cor = torch.argmin(scores) == 0
     del scores
     torch.cuda.empty_cache()
-    torch.mps.empty_cache()
+    if mps: torch.mps.empty_cache()
     return None, cor
 
 def create_tests(n, examples, labels):
@@ -57,7 +59,7 @@ def create_tests(n, examples, labels):
         
         del test
         torch.cuda.empty_cache()
-        torch.mps.empty_cache()
+        if mps: torch.mps.empty_cache()
     
 def evaluate(tests, model, n):
     model.eval()
