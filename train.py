@@ -29,6 +29,7 @@ val, val_labels = objs[2], objs[3]
 def eval(model):
     eval_model = NeuralStatistician(batch_size=21, sample_size=1).to(device)
     eval_model.load_state_dict(model.state_dict())
+    eval_model.eval()
     tests = create_tests(100, val, val_labels)
     _, correct = evaluate(tests, eval_model, 100)
     del eval_model
@@ -75,9 +76,12 @@ def train(
             torch.save(optim.state_dict(), f'checkpoints/{prefix}-checkpoint-optim-{epoch}')
             
         if (epoch + 1) % eval_at == 0:
+            model.eval()
             correct = eval(model)
             evals.append(correct)
             print(f'Correct: {correct:.3f}')
+            
+        model.train()
     
     plot([l.cpu().detach().numpy() for l in losses], [e.cpu().detach().numpy() for e in evals], prefix)
 
