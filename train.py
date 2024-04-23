@@ -76,7 +76,7 @@ def train(
             evals.append(correct)
             print(f'Correct: {correct:.3f}')
     
-    plot(losses.cpu(), evals.cpu(), prefix)
+    plot([l.cpu().detach().numpy() for l in losses], [e.cpu().detach().numpy() for e in evals], prefix)
 
 # NOTE -- hyperparams are frozen for the most part
 def parse_args():
