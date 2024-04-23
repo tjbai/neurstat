@@ -29,7 +29,6 @@ val, val_labels = objs[2], objs[3]
 def eval(model):
     eval_model = NeuralStatistician(batch_size=21, sample_size=1).to(device)
     eval_model.load_state_dict(model.state_dict())
-    eval_model.eval()
     tests = create_tests(100, val, val_labels)
     _, correct = evaluate(tests, eval_model, 100)
     del eval_model
@@ -86,6 +85,7 @@ def train(
             # evaluate val loss
             cum_val_loss = 0
             for batch in tqdm(val_loader):
+                if batch.shape[0] != 16: continue
                 inputs = batch.to(device)
                 outputs = model(inputs)
                 cum_val_loss += model.loss(*outputs)
