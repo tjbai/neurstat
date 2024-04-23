@@ -35,8 +35,6 @@ def is_correct(mu_c, logvar_c):
     return None, cor
 
 def create_tests(n, examples, labels):
-    import gc
-    
     labels = labels - np.min(labels)
     uniq = list(set(labels))
     

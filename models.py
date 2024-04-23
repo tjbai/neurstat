@@ -388,7 +388,7 @@ class NeuralStatistician(nn.Module):
         mu_c, logvar_c, # class distribution parameters
         q_params, p_params, # VAE stuff
         px, x, # bernoulli distribution over x, input batch
-        alpha=None
+        weight=None
     ):
         
         # R_D, "reconstruction"
@@ -411,11 +411,11 @@ class NeuralStatistician(nn.Module):
         # group and normalize   
         KL = (C_D + L_D) / (self.batch_size * self.sample_size)
        
-        return (KL - R_D) if alpha is None else ((KL / alpha) - (R_D * alpha))
+        return (KL - R_D) if weight is None else ((KL / weight) - (R_D * weight))
     
-    def step(self, inputs, optim, alpha):
+    def step(self, inputs, optim, weight):
         outputs = self.forward(inputs) 
-        loss = self.loss(*outputs, alpha=alpha)
+        loss = self.loss(*outputs, weight=weight)
         
         optim.zero_grad()
         loss.backward()

@@ -37,24 +37,27 @@ def eval(model):
     if mps: torch.mps.empty_cache()
     return correct
 
-def plot(losses, evals, prefix):
-    fig, axs = plt.subplots(1, 2, figsize=(12, 4)) 
+def plot(losses, val_losses, evals, prefix):
+    fig, axs = plt.subplots(1, 3, figsize=(12, 4)) 
     axs[0].plot(losses)
     axs[0].set_title('Loss')
-    axs[1].plot(evals)
-    axs[1].set_title('One-shot Classification')
+    axs[1].plot(val_losses)
+    axs[1].set_title('Val Loss')
+    axs[2].plot(evals)
+    axs[2].set_title('One-shot Classification')
     plt.savefig(f'figures/{prefix}-training.png')
 
 def train(
-    model, optim, loader,
+    model, optim, loader, val_loader,
     epochs, checkpoint_at, eval_at, prefix,
     alpha
 ):
     
     model.train()
-    losses = []
+    train_losses = []
+    val_losses = []
     evals = []
-    alpha = 1
+    weight = 1
     
     for epoch in range(epochs):
         print(f'Starting epoch: {epoch + 1}') 
@@ -62,13 +65,13 @@ def train(
         cum_loss = 0
         for batch in tqdm(loader):
             inputs = batch.to(device)
-            loss = model.step(inputs, optim, alpha)
+            loss = model.step(inputs, optim, (1 + weight) if alpha is not None else None)
             cum_loss += loss
             
-        alpha *= 0.5 # down-weight
+        weight *= 0.5 # down-weight
        
-        print(f'Loss: {(cum_loss):.3e}')
-        losses.append(cum_loss)
+        print(f'Loss: {cum_loss:.3e}')
+        train_losses.append(cum_loss.cpu().detach().numpy())
         if torch.isnan(cum_loss): raise Exception('Encountered nan loss')
         
         if (epoch + 1) % checkpoint_at == 0:
@@ -77,13 +80,29 @@ def train(
             
         if (epoch + 1) % eval_at == 0:
             model.eval()
+           
+            # evaluate val loss
+            cum_val_loss = 0
+            for batch in tqdm(val_loader):
+                inputs = batch.to(device)
+                outputs = model(inputs)
+                cum_val_loss += model.loss(*outputs)
+            val_losses.append(cum_val_loss.cpu().detach().numpy())
+            print(f'Val Loss: {cum_val_loss:.3e}')
+            
+            # evaluate one-shot classification 
             correct = eval(model)
             evals.append(correct)
             print(f'Correct: {correct:.3f}')
             
         model.train()
     
-    plot([l.cpu().detach().numpy() for l in losses], [e.cpu().detach().numpy() for e in evals], prefix)
+    plot(
+        train_losses,
+        val_losses,
+        [e.cpu().detach().numpy() for e in evals],
+        prefix
+    )
 
 # NOTE -- hyperparams are frozen for the most part
 def parse_args():
@@ -103,6 +122,9 @@ def main():
     dataset = OmniglotDataset('./data/chardata.pkl')
     loader = DataLoader(dataset=dataset, batch_size=16, shuffle=True)
     
+    val_dataset = OmniglotDataset('./data/chardata.pkl', split_id=1)
+    val_loader = DataLoader(dataset=val_dataset, batch_size=16, shuffle=True)
+    
     model = NeuralStatistician().to(device)
     optim = AdamW(model.parameters(), lr=args.lr)
     
@@ -111,7 +133,7 @@ def main():
         optim.load_state_dict(torch.load(f'checkpoints/checkpoint-optim-{args.from_checkpoint}'))
         
     train(
-        model, optim, loader,
+        model, optim, loader, val_loader,
         args.epochs, args.checkpoint_at, args.eval_at, args.prefix,
         args.alpha_weight
     )
