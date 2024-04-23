@@ -72,7 +72,9 @@ def train(
        
         print(f'Loss: {cum_loss:.3e}')
         train_losses.append(cum_loss.cpu().detach().numpy())
-        if torch.isnan(cum_loss): raise Exception('Encountered nan loss')
+        if torch.isnan(cum_loss):
+            print('Encountered nan loss')
+            break
         
         if (epoch + 1) % checkpoint_at == 0:
             torch.save(model.state_dict(), f'checkpoints/{prefix}-checkpoint-model-{epoch}')
