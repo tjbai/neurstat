@@ -10,8 +10,6 @@ class OmniglotDataset(Dataset):
         with open(input_path, 'rb') as f: objs = pickle.load(f)
         examples, labels = objs[2*split_id], objs[2*split_id+1]
         
-        
-        
         C = np.max(labels) + 1
         N = len(labels)
         one_hot = np.zeros((N, C)) # encode the class type for each example
@@ -37,6 +35,10 @@ class OmniglotDataset(Dataset):
         inputs = np.concatenate(samples, axis=0)
         inputs = inputs.reshape(-1, 5, 1, 28, 28)
         targets = np.concatenate(datasets, axis=0)
+        
+        if truncate is not None:
+            inputs = inputs[:truncate]
+            targets = targets[:truncate]
         
         self.data = {'inputs': inputs, 'targets': targets}
         

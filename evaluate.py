@@ -17,9 +17,7 @@ else: device = torch.device('cpu')
 random.seed(42)
 
 def kl(mu_q, logvar_q, mu_p, logvar_p):
-    # mu_q = mu_q.expand_as(mu_p)
-    # logvar_q = logvar_q.expand_as(logvar_p)
-    mu_p = mu_p.expand_as(mu_q)
+    mu_p = mu_p.expand_as(mu_q) # minimize test TO train KLD
     logvar_p = logvar_p.expand_as(logvar_q)
     rat = ((mu_q - mu_p)**2 + torch.exp(logvar_q)) / torch.exp(logvar_p)
     return 0.5 * torch.sum(rat + logvar_p - logvar_q - 1, dim=1)
@@ -34,7 +32,7 @@ def is_correct(mu_c, logvar_c):
     if mps: torch.mps.empty_cache()
     return None, cor
 
-def create_tests(n, k, examples, labels):
+def create_tests(n, m, k, examples, labels):
     labels = labels - np.min(labels)
     uniq = list(set(labels))
     
@@ -72,8 +70,9 @@ def evaluate(tests, model, n):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--n', type=int)
-    parser.add_argument('--k', type=int)
+    parser.add_argument('--n', type=int, help='total evaluation examples')
+    parser.add_argument('--m', type=int, help='m-shot')
+    parser.add_argument('--k', type=int, help='k-way')
     parser.add_argument('--checkpoint', type=Path)
     parser.add_argument('--split', default=2) # test vs. val split
     return parser.parse_args()
@@ -81,12 +80,12 @@ def parse_args():
 def main():
     args = parse_args()
     
-    model = NeuralStatistician(batch_size=1+args.k, sample_size=1).to(device) # 1 example + 20 candidates
+    model = NeuralStatistician(batch_size=args.m+args.k, sample_size=1).to(device)
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))
     
     with open('./data/chardata.pkl', 'rb') as f: objs = pickle.load(f)
     examples, labels = objs[2*args.split], objs[2*args.split+1]
-    test = create_tests(args.n, args.k, examples, labels)
+    test = create_tests(args.n, args.m, args.k, examples, labels)
    
     _, error = evaluate(test, model, args.n)
     print(error.item())

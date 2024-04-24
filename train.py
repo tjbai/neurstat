@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from models import NeuralStatistician
 from data import OmniglotDataset
-from eval import create_tests, evaluate
+from evaluate import create_tests, evaluate
 
 mps = False
 if torch.cuda.is_available():
@@ -129,12 +129,13 @@ def parse_args():
     parser.add_argument('--from-checkpoint', type=int)
     parser.add_argument('--prefix', type=str)
     parser.add_argument('--alpha-weight', action='store_true')
+    parser.add_argument('--truncate', type=int)
     return parser.parse_args()
 
 def main():
     args = parse_args()
     
-    dataset = OmniglotDataset('./data/chardata.pkl')
+    dataset = OmniglotDataset('./data/chardata.pkl', split_id=0, truncate=args.truncate)
     loader = DataLoader(dataset=dataset, batch_size=16, shuffle=True)
     
     val_dataset = OmniglotDataset('./data/chardata.pkl', split_id=1)
