@@ -1,11 +1,11 @@
 checkpoint-v1:
-test 1000: 38%
+around 38%
 
 checkpoint-v2: intermediate one-shot classification
-test 1000: 
+basically the same
 
 checkpoint-v3: dynamic loss interpolation
-test 1000: 
+basically the same
 
 checkpoint-v4: data augmentation
 test 1000:

@@ -27,23 +27,39 @@ with open('./data/chardata.pkl', 'rb') as f: objs = pickle.load(f)
 val, val_labels = objs[2], objs[3]
 
 def eval(model):
-    eval_model = NeuralStatistician(batch_size=21, sample_size=1).to(device)
-    eval_model.load_state_dict(model.state_dict())
-    tests = create_tests(100, val, val_labels)
-    _, correct = evaluate(tests, eval_model, 100)
-    del eval_model
+    eval_20 = NeuralStatistician(batch_size=21, sample_size=1).to(device)
+    eval_5 = NeuralStatistician(batch_size=6, sample_size=1).to(device)
+    
+    eval_20.load_state_dict(model.state_dict())
+    eval_5.load_state_dict(model.state_dict())
+    
+    tests_20 = create_tests(100, 20, val, val_labels)
+    tests_5 = create_tests(100, 5, val, val_labels)
+    
+    _, correct_20 = evaluate(tests_20, eval_20, 100)
+    _, correct_5 = evaluate(tests_5, eval_5, 100)
+    
+    del eval_20
+    del eval_5
     torch.cuda.empty_cache()
     if mps: torch.mps.empty_cache()
-    return correct
+    
+    return correct_20, correct_5
 
 def plot(losses, val_losses, evals, prefix):
-    fig, axs = plt.subplots(1, 3, figsize=(12, 4)) 
-    axs[0].plot(losses)
-    axs[0].set_title('Loss')
-    axs[1].plot(val_losses)
-    axs[1].set_title('Val Likelihood')
-    axs[2].plot(evals)
-    axs[2].set_title('One-shot Classification')
+    _, axs = plt.subplots(2, 2, figsize=(12, 8)) 
+    
+    axs[0][0].plot(losses)
+    axs[0][0].set_title('Loss')
+    axs[0][1].plot(val_losses)
+    axs[0][1].set_title('Val Likelihood')
+    
+    axs[1][0].plot([eval[0] for eval in evals])
+    axs[1][0].set_title('20-way classification')
+    axs[1][1].plot([eval[1] for eval in evals])
+    axs[1][1].set_title('5-way classification')
+   
+    plt.tight_layout() 
     plt.savefig(f'figures/{prefix}-training.png')
 
 def train(
@@ -82,7 +98,7 @@ def train(
         if (epoch + 1) % eval_at == 0:
             model.eval()
            
-            # evaluate val loss
+            # evaluate val likelihood
             cum_val_loss = 0
             for batch in tqdm(val_loader):
                 if batch.shape[0] != 16: continue
@@ -94,18 +110,14 @@ def train(
             print(f'Val Loss: {cum_val_loss:.3e}')
             
             # evaluate one-shot classification 
-            correct = eval(model)
-            evals.append(correct)
-            print(f'Correct: {correct:.3f}')
+            correct_20, correct_5 = eval(model)
+            evals.append((correct_20.cpu().detach().numpy(), correct_5.cpu().detach().numpy()))
+            print(f'Correct 20-way: {correct_20:.3f}')
+            print(f'Correct 5-way: {correct_5:.3f}')
             
         model.train()
     
-    plot(
-        train_losses,
-        val_losses,
-        [e.cpu().detach().numpy() for e in evals],
-        prefix
-    )
+    plot(train_losses, val_losses, evals, prefix)
 
 # NOTE -- hyperparams are frozen for the most part
 def parse_args():

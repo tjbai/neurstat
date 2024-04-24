@@ -34,7 +34,7 @@ def is_correct(mu_c, logvar_c):
     if mps: torch.mps.empty_cache()
     return None, cor
 
-def create_tests(n, examples, labels):
+def create_tests(n, k, examples, labels):
     labels = labels - np.min(labels)
     uniq = list(set(labels))
     
@@ -45,14 +45,14 @@ def create_tests(n, examples, labels):
     for i, label in enumerate(labels): one_hot[i, label] = 1
     
     for _ in range(n):
-        base_class, *noise = random.sample(uniq, k=20)
+        base_class, *noise = random.sample(uniq, k=k)
         res = random.sample(list(indices[one_hot[:, base_class].astype(bool)]), k=2)
         
         for i in noise:
             [d] = random.sample(list(indices[one_hot[:, i].astype(bool)]), k=1)
             res.append(d)
             
-        test = torch.Tensor(examples[res]).view(21, 1, 28, 28).to(device)
+        test = torch.Tensor(examples[res]).view(1+k, 1, 28, 28).to(device)
         yield test
         
         del test
@@ -73,19 +73,20 @@ def evaluate(tests, model, n):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--n', type=int)
-    parser.add_argument('--from-checkpoint', type=Path)
+    parser.add_argument('--k', type=int)
+    parser.add_argument('--checkpoint', type=Path)
     parser.add_argument('--split', default=2) # test vs. val split
     return parser.parse_args()
 
 def main():
     args = parse_args()
     
-    model = NeuralStatistician(batch_size=21, sample_size=1).to(device) # 1 example + 20 candidates
-    model.load_state_dict(torch.load(args.from_checkpoint, map_location=device))
+    model = NeuralStatistician(batch_size=1+args.k, sample_size=1).to(device) # 1 example + 20 candidates
+    model.load_state_dict(torch.load(args.checkpoint, map_location=device))
     
     with open('./data/chardata.pkl', 'rb') as f: objs = pickle.load(f)
     examples, labels = objs[2*args.split], objs[2*args.split+1]
-    test = create_tests(args.n, examples, labels)
+    test = create_tests(args.n, args.k, examples, labels)
    
     _, error = evaluate(test, model, args.n)
     print(error.item())

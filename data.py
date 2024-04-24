@@ -2,6 +2,7 @@ import pickle
 import numpy as np
 from torch.utils.data import Dataset
 
+np.random.seed(42)
 
 class OmniglotDataset(Dataset):
     
