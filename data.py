@@ -6,7 +6,7 @@ np.random.seed(42)
 
 class OmniglotDataset(Dataset):
     
-    def __init__(self, input_path, split_id=0):
+    def __init__(self, input_path, split_id=0, truncate=None):
         with open(input_path, 'rb') as f: objs = pickle.load(f)
         examples, labels = objs[2*split_id], objs[2*split_id+1]
         
@@ -35,6 +35,10 @@ class OmniglotDataset(Dataset):
         inputs = np.concatenate(samples, axis=0)
         inputs = inputs.reshape(-1, 5, 1, 28, 28)
         targets = np.concatenate(datasets, axis=0)
+        
+        if truncate is not None:
+            inputs = inputs[:truncate]
+            targets = targets[:truncate]
         
         self.data = {'inputs': inputs, 'targets': targets}
         
