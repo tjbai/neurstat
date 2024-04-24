@@ -41,7 +41,7 @@ def plot(losses, val_losses, evals, prefix):
     axs[0].plot(losses)
     axs[0].set_title('Loss')
     axs[1].plot(val_losses)
-    axs[1].set_title('Val Loss')
+    axs[1].set_title('Val Likelihood')
     axs[2].plot(evals)
     axs[2].set_title('One-shot Classification')
     plt.savefig(f'figures/{prefix}-training.png')
@@ -88,7 +88,8 @@ def train(
                 if batch.shape[0] != 16: continue
                 inputs = batch.to(device)
                 outputs = model(inputs)
-                cum_val_loss += model.loss(*outputs)
+                _, R_D = model.loss(*outputs)
+                cum_val_loss += R_D
             val_losses.append(cum_val_loss.cpu().detach().numpy())
             print(f'Val Loss: {cum_val_loss:.3e}')
             
