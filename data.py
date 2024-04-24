@@ -17,7 +17,7 @@ class OmniglotDataset(Dataset):
         
         idx = np.random.permutation(N)
         examples = examples[idx]
-        labels = labels[idx]
+        one_hot = one_hot[idx]
         
         samples = []
         datasets = []
