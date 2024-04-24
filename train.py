@@ -33,8 +33,8 @@ def eval(model):
     eval_20.load_state_dict(model.state_dict())
     eval_5.load_state_dict(model.state_dict())
     
-    tests_20 = create_tests(100, 1, 20, val, val_labels)
-    tests_5 = create_tests(100, 1, 5, val, val_labels)
+    tests_20 = create_tests(500, 1, 20, val, val_labels)
+    tests_5 = create_tests(500, 1, 5, val, val_labels)
     
     _, correct_20 = evaluate(tests_20, eval_20, 100)
     _, correct_5 = evaluate(tests_5, eval_5, 100)
