@@ -39,7 +39,8 @@ class InputEncoder(nn.Module):
         ])
         
     def forward(self, x):
-        h = x.view(-1, 1, 28, 28)
+        if x.shape == (1, 1, 28, 28): h = x
+        else: h = x.view(-1, 1, 28, 28)
         for conv, bn in zip(self.conv_layers, self.bn_layers):
             h = conv(h)
             h = bn(h)
@@ -341,11 +342,8 @@ class NeuralStatistician(nn.Module):
         return mu + stdev * eps
             
     def forward(self, x):
-        
-        # (bsz, ssz, 256, 4, 4)
         h = self.encoder(x) # (bsz, ssz, 256, 4, 4)
 
-        # (16, 512), (16, 512)
         mu_c, logvar_c = self.statistic_network(h)
         c = self.reparam(mu_c, logvar_c)
         
@@ -353,7 +351,7 @@ class NeuralStatistician(nn.Module):
         q_params, p_params = [], []
         
         prev_z = None
-        for i, layer in enumerate(self.inference_networks):
+        for layer in self.inference_networks:
             mu_z, logvar_z = layer(prev_z, h, c)
             q_params.append((mu_z, logvar_z))
             z = self.reparam(mu_z, logvar_z)
@@ -390,7 +388,6 @@ class NeuralStatistician(nn.Module):
         px, x, # bernoulli distribution over x, input batch
         weight=None
     ):
-        
         # R_D, "reconstruction"
         log_likelihood = self._log_likelihood(x, px)
         R_D = log_likelihood / (self.batch_size * self.sample_size)
@@ -425,3 +422,20 @@ class NeuralStatistician(nn.Module):
         optim.step()
         
         return loss
+    
+    def sample(self, D):
+        h = self.encoder(D)
+        mu_c, _ = self.statistic_network(h)
+        
+        samples = []
+        z = None
+        for i, decoder in enumerate(self.latent_decoders):
+            mu_z, logvar_z = decoder(z, mu_c)
+            if i == 0:
+                mu_z = mu_z.repeat(self.sample_size, 1)
+                logvar_z = logvar_z.repeat(self.sample_size, 1)
+            z = self.reparam(mu_z, logvar_z)
+            samples.append(z)
+       
+        z_concat = torch.cat(samples, dim=1)
+        return self.observation_decoder(z_concat, mu_c)
