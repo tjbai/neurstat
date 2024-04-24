@@ -1,16 +1,32 @@
-checkpoint-v1:
-around 38%
+# first attempts
 
-checkpoint-v2: intermediate one-shot classification
-basically the same
+checkpoint-v1: first attempt, around 38% accuracy
 
-checkpoint-v3: dynamic loss interpolation
-basically the same
+checkpoint-v2: no interpolation
 
-checkpoint-v4: data augmentation
-test 1000:
+checkpoint-v3: with interpolation
 
-TODO:
-- add generation code
-- add eval loss to graph
-- 5-shot classification
+# full data (1200)
+
+checkpoint-v4: fixed data, no interpolation
+
+|        | 5-way | 20-way |
+| ------ | ----- | ------ |
+| 1-shot |       |        |
+| 5-shot |       |        |
+
+checkpoint-v5: fixed data, with interpolation
+
+|        | 5-way | 20-way |
+| ------ | ----- | ------ |
+| 1-shot |       |        |
+| 5-shot |       |        |
+
+# truncated data (400)
+
+checkpoint-v6: truncated data, with/no interpolation
+
+|        | 5-way | 20-way |
+| ------ | ----- | ------ |
+| 1-shot |       |        |
+| 5-shot |       |        |
