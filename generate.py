@@ -18,7 +18,7 @@ def save_test_grid(inputs, samples, save_path):
     inputs = 1 - inputs.cpu().data.view(-1, 5, 1, 28, 28)
     reconstructions = samples.cpu().data.view(-1, 5, 1, 28, 28)
     images = torch.cat((inputs, reconstructions), dim=1).view(-1, 1, 28, 28)
-    save_image(images, save_path, nrow=50)
+    save_image(images, save_path, nrow=10)
 
 def main():
     args = parse_args()
