@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from models import NeuralStatistician
-from data import OmniglotDataset
+from data import ClassDataset
 from evaluate import create_tests, evaluate
 
 mps = False
@@ -135,10 +135,10 @@ def parse_args():
 def main():
     args = parse_args()
     
-    dataset = OmniglotDataset('./data/chardata.pkl', split_id=0, truncate=args.truncate)
+    dataset = ClassDataset('./data/chardata.pkl', split_id=0, truncate=args.truncate)
     loader = DataLoader(dataset=dataset, batch_size=16, shuffle=True)
     
-    val_dataset = OmniglotDataset('./data/chardata.pkl', split_id=1)
+    val_dataset = ClassDataset('./data/chardata.pkl', split_id=1)
     val_loader = DataLoader(dataset=val_dataset, batch_size=16, shuffle=True)
     
     model = NeuralStatistician().to(device)

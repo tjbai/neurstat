@@ -4,9 +4,18 @@ from torch.utils.data import Dataset
 
 np.random.seed(42)
 
-class OmniglotDataset(Dataset):
+class PointDataset(Dataset):
+    pass
+
+class ClassDataset(Dataset):
     
-    def __init__(self, input_path, split_id=0, truncate=None):
+    def __init__(
+        self,
+        input_path,
+        split_id=0,
+        truncate=None,
+        split_classes=False
+    ):
         with open(input_path, 'rb') as f: objs = pickle.load(f)
         examples, labels = objs[2*split_id], objs[2*split_id+1]
         

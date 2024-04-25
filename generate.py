@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 from pathlib import Path
 from models import NeuralStatistician, device
-from data import OmniglotDataset
+from data import ClassDataset 
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
 
@@ -26,7 +26,7 @@ def main():
     model = NeuralStatistician(batch_size=5, sample_size=5).to(device)
     model.load_state_dict(torch.load(args.checkpoint, map_location=device))
    
-    dataset = OmniglotDataset('./data/chardata.pkl', split_id=1)
+    dataset = ClassDataset('./data/chardata.pkl', split_id=1)
     loader = DataLoader(dataset, batch_size=5)
     example_batch = torch.Tensor(next(iter(loader))).to(device)
     
