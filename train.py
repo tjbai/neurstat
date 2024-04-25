@@ -36,8 +36,8 @@ def eval(model):
     tests_20 = create_tests(500, 1, 20, val, val_labels)
     tests_5 = create_tests(500, 1, 5, val, val_labels)
     
-    _, correct_20 = evaluate(tests_20, eval_20, 100)
-    _, correct_5 = evaluate(tests_5, eval_5, 100)
+    _, correct_20 = evaluate(tests_20, eval_20, 500)
+    _, correct_5 = evaluate(tests_5, eval_5, 500)
     
     del eval_20
     del eval_5

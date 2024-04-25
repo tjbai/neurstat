@@ -22,16 +22,6 @@ def kl(mu_q, logvar_q, mu_p, logvar_p):
     rat = ((mu_q - mu_p)**2 + torch.exp(logvar_q)) / torch.exp(logvar_p)
     return 0.5 * torch.sum(rat + logvar_p - logvar_q - 1, dim=1)
 
-def is_correct(mu_c, logvar_c):
-    mu_one_shot, mu_candidates = mu_c[0], mu_c[1:]
-    logvar_one_shot, logvar_candidates = logvar_c[0], logvar_c[1:]
-    scores = kl(mu_candidates, logvar_candidates, mu_one_shot, logvar_one_shot)
-    cor = torch.argmin(scores) == 0
-    del scores
-    torch.cuda.empty_cache()
-    if mps: torch.mps.empty_cache()
-    return None, cor
-
 def create_tests(n, m, k, examples, labels):
     labels = labels - np.min(labels)
     uniq = list(set(labels))
@@ -44,29 +34,41 @@ def create_tests(n, m, k, examples, labels):
     
     for _ in range(n):
         base_class, *noise = random.sample(uniq, k=k)
-        res = random.sample(list(indices[one_hot[:, base_class].astype(bool)]), k=2)
+        res = random.sample(list(indices[one_hot[:, base_class].astype(bool)]), k=m+1)
         
         for i in noise:
             [d] = random.sample(list(indices[one_hot[:, i].astype(bool)]), k=1)
             res.append(d)
-            
-        test = torch.Tensor(examples[res]).view(1+k, 1, 28, 28).to(device)
-        yield test
         
-        del test
+        inputs = torch.Tensor(examples[res]).view(m+k, 1, 28, 28).to(device)
+        shots = inputs[:m].transpose(0, 1)
+        candidates = inputs[m:]
+            
+        yield shots, candidates
+        
+        del shots
+        del candidates
+        
         torch.cuda.empty_cache()
         if mps: torch.mps.empty_cache()
     
-def evaluate(tests, model, n):
-    model.eval()
+def evaluate(tests, shot_model, cand_model, n):
     correct = 0
-    all_scores = []
-    for test in tqdm(tests, total=n):
-        mu_c, logvar_c, *_ = model(test)
-        scores, cor = is_correct(mu_c, logvar_c)
-        all_scores.append(scores)
-        correct += cor
-    return all_scores, correct / n
+    shot_model.eval()
+    cand_model.eval()
+    
+    for shots, candidates in tqdm(tests, total=n):
+        mu_c, logvar_c, *_ = shot_model(shots)
+        cand_mu_c, cand_logvar_c, *_ = cand_model(candidates)
+        
+        scores = kl(cand_mu_c, cand_logvar_c, mu_c, logvar_c)
+        correct += torch.argmin(scores) == 0 
+        
+        del scores
+        torch.cuda.empty_cache()
+        if mps: torch.mps.empty_cache()
+        
+    return correct / n
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -80,14 +82,17 @@ def parse_args():
 def main():
     args = parse_args()
     
-    model = NeuralStatistician(batch_size=args.m+args.k, sample_size=1).to(device)
-    model.load_state_dict(torch.load(args.checkpoint, map_location=device))
+    shot_model = NeuralStatistician(batch_size=1, sample_size=args.m).to(device)
+    shot_model.load_state_dict(torch.load(args.checkpoint, map_location=device))
+    
+    cand_model = NeuralStatistician(batch_size=args.k, sample_size=1).to(device)
+    cand_model.load_state_dict(torch.load(args.checkpoint, map_location=device))
     
     with open('./data/chardata.pkl', 'rb') as f: objs = pickle.load(f)
     examples, labels = objs[2*args.split], objs[2*args.split+1]
     test = create_tests(args.n, args.m, args.k, examples, labels)
    
-    _, error = evaluate(test, model, args.n)
+    error = evaluate(test, shot_model, cand_model, args.n)
     print(error.item())
     
 if __name__ == '__main__':

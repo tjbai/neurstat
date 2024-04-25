@@ -15,7 +15,7 @@ checkpoint-v4: fixed data, no interpolation
 | 1-shot |       |        |
 | 5-shot |       |        |
 
-checkpoint-v5: fixed data, with interpolation
+checkpoint-v5: fixed data, with interpolation, more val examples
 
 |        | 5-way | 20-way |
 | ------ | ----- | ------ |
@@ -24,7 +24,7 @@ checkpoint-v5: fixed data, with interpolation
 
 # truncated data (400)
 
-checkpoint-v6: truncated data, with/no interpolation
+checkpoint-v6: short data, with interpolation, more val examples
 
 |        | 5-way | 20-way |
 | ------ | ----- | ------ |
