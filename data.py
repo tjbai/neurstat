@@ -48,6 +48,9 @@ class ClassDataset(Dataset):
         if truncate is not None:
             inputs = inputs[:truncate]
             targets = targets[:truncate]
+            
+        if split_classes:
+            inputs = inputs.reshape(-1, 1, 1, 28, 28)
         
         self.data = {'inputs': inputs, 'targets': targets}
         

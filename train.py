@@ -27,17 +27,21 @@ with open('./data/chardata.pkl', 'rb') as f: objs = pickle.load(f)
 val, val_labels = objs[2], objs[3]
 
 def eval(model):
-    eval_20 = NeuralStatistician(batch_size=21, sample_size=1).to(device)
-    eval_5 = NeuralStatistician(batch_size=6, sample_size=1).to(device)
+    eval_20_shot = NeuralStatistician(batch_size=1, sample_size=1).to(device)
+    eval_20_cands = NeuralStatistician(batch_size=20, sample_size=1).to(device)
+    eval_20_shot.load_state_dict(model.state_dict())
+    eval_20_cands.load_state_dict(model.state_dict())
     
-    eval_20.load_state_dict(model.state_dict())
-    eval_5.load_state_dict(model.state_dict())
+    eval_5_shot = NeuralStatistician(batch_size=1, sample_size=1).to(device)
+    eval_5_cands = NeuralStatistician(batch_size=5, sample_size=1).to(device)
+    eval_5_shot.load_state_dict(model.state_dict())
+    eval_5_cands.load_state_dict(model.state_dict())
     
     tests_20 = create_tests(500, 1, 20, val, val_labels)
     tests_5 = create_tests(500, 1, 5, val, val_labels)
     
-    _, correct_20 = evaluate(tests_20, eval_20, 500)
-    _, correct_5 = evaluate(tests_5, eval_5, 500)
+    _, correct_20 = evaluate(tests_20, eval_20_shot, eval_20_cands, 500)
+    _, correct_5 = evaluate(tests_5, eval_5_shot, eval_5_cands, 500)
     
     del eval_20
     del eval_5
@@ -65,7 +69,7 @@ def plot(losses, val_losses, evals, prefix):
 def train(
     model, optim, loader, val_loader,
     epochs, checkpoint_at, eval_at, prefix,
-    alpha
+    alpha, split_classes
 ):
     
     model.train()
@@ -87,9 +91,7 @@ def train(
        
         print(f'Loss: {cum_loss:.3e}')
         train_losses.append(cum_loss.cpu().detach().numpy())
-        if torch.isnan(cum_loss):
-            print('Encountered nan loss')
-            break
+        if torch.isnan(cum_loss): break
         
         if (epoch + 1) % checkpoint_at == 0:
             torch.save(model.state_dict(), f'checkpoints/{prefix}-checkpoint-model-{epoch}')
@@ -106,15 +108,18 @@ def train(
                 outputs = model(inputs)
                 _, R_D = model.loss(*outputs)
                 cum_val_loss += R_D
-            val_losses.append(cum_val_loss.cpu().detach().numpy())
+                
+            # val_losses.append(cum_val_loss.cpu().detach().numpy())
+            val_losses.append(cum_val_loss)
             print(f'Val Loss: {cum_val_loss:.3e}')
             
             # evaluate one-shot classification 
-            correct_20, correct_5 = eval(model)
-            evals.append((correct_20.cpu().detach().numpy(), correct_5.cpu().detach().numpy()))
-            print(f'Correct 20-way: {correct_20:.3f}')
-            print(f'Correct 5-way: {correct_5:.3f}')
-            
+            if not split_classes:
+                correct_20, correct_5 = eval(model)
+                evals.append((correct_20.cpu().detach().numpy(), correct_5.cpu().detach().numpy()))
+                print(f'Correct 20-way: {correct_20:.3f}')
+                print(f'Correct 5-way: {correct_5:.3f}')
+                
         model.train()
     
     plot(train_losses, val_losses, evals, prefix)
@@ -130,18 +135,22 @@ def parse_args():
     parser.add_argument('--prefix', type=str)
     parser.add_argument('--alpha-weight', action='store_true')
     parser.add_argument('--truncate', type=int)
+    parser.add_argument('--split-classes', action='store_true')
     return parser.parse_args()
 
 def main():
     args = parse_args()
     
-    dataset = ClassDataset('./data/chardata.pkl', split_id=0, truncate=args.truncate)
-    loader = DataLoader(dataset=dataset, batch_size=16, shuffle=True)
+    batch_size = (16, 120)[args.split_classes]
+    sample_size = (5, 1)[args.split_classes]
     
-    val_dataset = ClassDataset('./data/chardata.pkl', split_id=1)
-    val_loader = DataLoader(dataset=val_dataset, batch_size=16, shuffle=True)
+    dataset = ClassDataset('./data/chardata.pkl', split_id=0, truncate=args.truncate, split_classes=args.split_classes)
+    loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
     
-    model = NeuralStatistician().to(device)
+    val_dataset = ClassDataset('./data/chardata.pkl', split_id=1, split_classes=args.split_classes)
+    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=True)
+    
+    model = NeuralStatistician(batch_size=batch_size, sample_size=sample_size).to(device)
     optim = AdamW(model.parameters(), lr=args.lr)
     
     if args.from_checkpoint:
@@ -151,7 +160,7 @@ def main():
     train(
         model, optim, loader, val_loader,
         args.epochs, args.checkpoint_at, args.eval_at, args.prefix,
-        args.alpha_weight
+        args.alpha_weight, args.split_classes
     )
     
 if __name__ == '__main__':
