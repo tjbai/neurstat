@@ -128,7 +128,7 @@ class ResNet(nn.Module):
             else: x = self.nonlin(x + init_x)
         return x
 
-# mu_z, s2_z = p(z_i-1 | z_i, h, c)   
+# mu_z, s2_z = q(z_i-1 | z_i, h, c)   
 class InferenceNet(nn.Module):
     
     def __init__(
@@ -172,7 +172,7 @@ class InferenceNet(nn.Module):
         c = self.fc_c(c)
         c = c.view(self.batch_size, 1, self.hidden_dim).expand_as(h)
 
-        # concate and feed to resnet
+        # concatenate and feed to resnet
         o = z + h + c
         o = o.view(-1, self.hidden_dim)
         o = self.nonlin(o)
